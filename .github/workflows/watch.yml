@@ -1,0 +1,31 @@
+name: Watch the live site
+
+# Every 3 hours: is pitchinhelp.com serving exactly a published release? A failed run emails the
+# repository's owner (GitHub's default for failed scheduled workflows). A good run calls the
+# optional check-in URL, so a watcher that stops running (GitHub pauses schedules in a repository
+# with no activity for 60 days) is noticed too.
+on:
+  schedule:
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with: { persist-credentials: false }
+      - name: Compare the live site with the latest release (or the one before, mid-deploy)
+        env:
+          SITE: ${{ vars.SITE_URL || 'https://pitchinhelp.com' }}
+        run: |
+          set -- latest.json
+          [ -f previous.json ] && set -- "$@" previous.json
+          python3 check.py "$SITE" "$@"
+      - name: Check in
+        if: ${{ success() && vars.WATCH_PING_URL != '' }}
+        env: { PING: "${{ vars.WATCH_PING_URL }}" }
+        run: curl -fsS -m 10 --retry 3 "$PING" > /dev/null
